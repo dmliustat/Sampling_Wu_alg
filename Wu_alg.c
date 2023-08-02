@@ -16,13 +16,15 @@ enum event_type
     mutn = 1
 };
 
-// Global variables
+// External global variables
 int m = 0, n = 0;
 int observed_types[MAX_NUM_ROWS][MAX_NUM_COLUMNS];
+double theta;
+
+// Local global variables
 int final_node_ac_mps[MAX_NUM_ROWS][MAX_NUM_COLUMNS];
 int site_nums[MAX_NUM_COLUMNS];
 int num_coal_table[MAX_NUM_COLUMNS];
-double theta;
 
 struct AC
 {
@@ -102,33 +104,40 @@ int (*trim_and_sort_types())[MAX_NUM_COLUMNS]
         }
     }
 
-    int ncopies[n - 1];
-    for (int j = 0; j < n - 1; j++)
+    int *ncopies = (int *)malloc((n - 1) * sizeof(int));
+    if (ncopies == NULL)
+        return NULL;
+    else
     {
-        ncopies[j] = 0;
-        for (int i = 0; i < m; i++)
+        for (int j = 0; j < n - 1; j++)
         {
-            ncopies[j] += observed_types[i][j];
+            ncopies[j] = 0;
+            for (int i = 0; i < m; i++)
+            {
+                ncopies[j] += observed_types[i][j];
+            }
         }
     }
 
     int *indices = sort_and_return_indices(ncopies, n - 1);
+    free(ncopies);
+    if (indices == NULL)
+    {
+        return NULL;
+    }
 
     for (int j = 0; j < n - 1; j++)
     {
         site_nums[j] = indices[j] + 1;
-        // printf("%d ", site_nums[j]);
     }
-    // printf("\n");
-    // print_types(observed_types);
-    // printf("\n");
-    // for (int j = 0; j < n - 1; j++)
-    // {
-    //     printf("%d ", ncopies[j]);
-    // }
 
-    // int ordered[MAX_NUM_ROWS][MAX_NUM_COLUMNS];
     int(*ordered)[MAX_NUM_COLUMNS] = malloc(MAX_NUM_ROWS * sizeof(int[MAX_NUM_COLUMNS]));
+    if (ordered == NULL)
+    {
+        free(indices);
+        return NULL;
+    }
+
     reorganize_array(observed_types, indices, m, n - 1, ordered);
     free(indices);
 
@@ -145,9 +154,12 @@ struct node make_final_node()
         ac.mult[i] = observed_types[i][n - 1];
     }
 
-    print_types(observed_types);
+    // print_types(observed_types);
     int(*types)[MAX_NUM_COLUMNS] = trim_and_sort_types();
-    print_types(types);
+    if (types == NULL)
+        exit(1);
+
+    // print_types(types);
 
     int idx;
     for (int i = 0; i < m; i++)
@@ -220,14 +232,14 @@ int get_num_coal_mutn(int mutn, struct AC ac)
 
 void get_num_coal_table(struct node final_node)
 {
-    int all_mutns[n];
     for (int j = 0; j < n; j++)
     {
-        all_mutns[j] = j;
         num_coal_table[j] = get_num_coal_mutn(j, final_node.ac);
         printf("%d\n", num_coal_table[j]);
     }
-    int tip_mutns[m];
+    int *tip_mutns = (int *)malloc(m * sizeof(int));
+    if (tip_mutns == NULL)
+        exit(1);
     for (int i = 0; i < m; i++)
     {
         tip_mutns[i] = final_node.ac.mps[i][0];
@@ -236,6 +248,7 @@ void get_num_coal_table(struct node final_node)
     {
         num_coal_table[tip_mutns[i]] += final_node.ac.mult[i] - 1;
     }
+    free(tip_mutns);
 }
 
 int get_num_coal(int mutn)
@@ -258,6 +271,8 @@ struct AC init_AC()
 {
     struct AC ac;
     int(*mps)[MAX_NUM_COLUMNS] = malloc(MAX_NUM_ROWS * sizeof(int[MAX_NUM_COLUMNS]));
+    if (mps == NULL)
+        exit(1);
     mps[0][0] = MUTATION_PATH_TERMINATOR;
     ac.mult[0] = 1;
     ac.num_mps = 1;
@@ -274,16 +289,38 @@ struct node init_node()
     return n;
 }
 
-struct stage init_stage()
+struct stage *init_stage()
 {
-    struct stage s;
-    s.nodes = (struct node *)malloc(sizeof(struct node[1]));
-    s.nodes[0] = init_node();
-    s.keys = (struct key *)malloc(sizeof(struct key[1]));
-    s.keys[0].keyStr = (char *)malloc(sizeof(char[4]));
-    strcat(s.keys[0].keyStr, "0:1");
-    s.keys[0].length = 3;
-    s.num_nodes = 1;
+    struct stage *s = (struct stage *)malloc(sizeof(struct stage));
+    if (s == NULL)
+    {
+        exit(1);
+    }
+
+    (*s).nodes = (struct node *)malloc(sizeof(struct node[1]));
+    if ((*s).nodes == NULL)
+        exit(1);
+    (*s).nodes[0] = init_node();
+
+    (*s).keys = (struct key *)malloc(sizeof(struct key[1]));
+    if ((*s).keys == NULL)
+    {
+        free((*s).nodes[0].ac.mps);
+        free((*s).nodes);
+        exit(1);
+    }
+
+    (*s).keys[0].keyStr = (char *)malloc(sizeof(char[4]));
+    if ((*s).keys[0].keyStr == NULL)
+    {
+        free((*s).nodes[0].ac.mps);
+        free((*s).nodes);
+        free((*s).keys);
+        exit(1);
+    }
+    strcat_s((*s).keys[0].keyStr, 4, "0:1");
+    (*s).keys[0].length = 3;
+    (*s).num_nodes = 1;
     return s;
 }
 
@@ -297,7 +334,7 @@ int find_path(int mutn, int (*mps)[MAX_NUM_COLUMNS], int num_mps)
         }
     }
     // should always be able to find the path;
-    exit - 1;
+    exit(1);
 }
 
 struct AC make_desc_AC(struct AE ae, struct AC ac)
@@ -368,7 +405,7 @@ double weight(enum event_type type, int n, int mult, double theta)
     }
     else
     {
-        wt = mult * theta / (n * (n - 1 + theta));
+        wt = mult * theta / (n * ((double)n - 1 + theta));
     }
     return wt;
 }
@@ -394,12 +431,12 @@ double calc_prog_contrib(int ae_index, struct node progen_node, double theta)
 // Function to concatenate strings with a specified separator
 char *str_c(const char *const *x, int n, const char *separator, int *ord)
 {
-    int total_length = 0, ind;
+    int total_length = 0;
     for (int i = 0; i < n; i++)
     {
-        total_length += strlen(x[i]);
+        total_length += (int) strlen(x[i]);
     }
-    total_length += (n - 1) * strlen(separator) + 1;
+    total_length += (n - 1) * (int)strlen(separator) + 1;
     char *result = (char *)malloc(total_length * sizeof(char));
     if (result == NULL)
     {
@@ -413,10 +450,10 @@ char *str_c(const char *const *x, int n, const char *separator, int *ord)
         {
             idx = ord[i];
         }
-        strcat(result, x[idx]);
+        strcat_s(result, total_length, x[idx]);
         if (i < n - 1)
         {
-            strcat(result, separator);
+            strcat_s(result, total_length, separator);
         }
     }
     return result;
@@ -426,9 +463,13 @@ char *str_c(const char *const *x, int n, const char *separator, int *ord)
 char **int_array_to_str_array(int *arr, int n)
 {
     char **str_arr = (char **)malloc(n * sizeof(char *));
+    if (str_arr == NULL)
+        return NULL;
     for (int i = 0; i < n; i++)
     {
         str_arr[i] = (char *)malloc(6 * sizeof(char)); // Assuming int won't exceed 5 digits + 1 for null terminator
+        if (str_arr[i] == NULL)
+            return NULL;
         snprintf(str_arr[i], 6, "%d", arr[i]);
         if (arr[i] == MUTATION_PATH_TERMINATOR)
             break;
@@ -455,6 +496,9 @@ struct key make_key(struct AC ac)
     int num_rows = ac.num_mps;
     // Convert integer arrays in mps to arrays of strings
     char **mpaths = (char **)malloc(num_rows * sizeof(char *));
+    if (mpaths == NULL)
+        exit(1);
+
     for (int i = 0; i < num_rows; i++)
     {
         int length = find_length(ac.mps[i], n, MUTATION_PATH_TERMINATOR);
@@ -471,6 +515,10 @@ struct key make_key(struct AC ac)
 
     // Sort and concatenate mutation paths
     int *ord = (int *)malloc(num_rows * sizeof(int));
+    if (ord == NULL)
+    {
+        exit(1);
+    }
     for (int i = 0; i < num_rows; i++)
     {
         ord[i] = i;
@@ -509,7 +557,7 @@ struct key make_key(struct AC ac)
     free(sorted_mpaths);
     free(sorted_mults);
 
-    struct key ret = {result, strlen(result)};
+    struct key ret = {result, (int)strlen(result)};
     return ret;
 }
 
@@ -695,7 +743,7 @@ bool has_one_mutn_free(struct AE ae, struct AC ac)
 {
     for (int i = 0; i < ac.num_mps; i++)
     {
-        if (ac.mps[i][0] == ae.parent & ac.mult[i] == 1)
+        if (ac.mps[i][0] == ae.parent && ac.mult[i] == 1)
         {
             return true;
         }
@@ -705,7 +753,7 @@ bool has_one_mutn_free(struct AE ae, struct AC ac)
 
 bool inelig(struct AE ae, int *aparents, int parents_cnt, struct AC ac)
 {
-    return has_active_coal(ae, aparents, parents_cnt) & has_one_mutn_free(ae, ac);
+    return has_active_coal(ae, aparents, parents_cnt) && has_one_mutn_free(ae, ac);
 }
 
 bool iselig(int ae_index, struct node n)
@@ -717,6 +765,9 @@ bool iselig(int ae_index, struct node n)
     else // mutn
     {
         int *aparents = (int *)malloc(n.aes.num_AEs * sizeof(int));
+        if (aparents == NULL)
+            exit(1);
+
         int parents_cnt = 0;
         for (int i = 0; i < n.aes.num_AEs; i++)
         {
@@ -732,33 +783,42 @@ bool iselig(int ae_index, struct node n)
     }
 }
 
-struct stage construct_next_stage(struct stage curr_stage)
+void clean_up(struct stage *curr_stage)
 {
-    struct stage next_stage;
-    next_stage.num_nodes = 0;
-    next_stage.nodes = malloc(sizeof(struct node) * (MAX_NUM_ROWS + MAX_NUM_COLUMNS));
-    next_stage.keys = malloc(sizeof(struct key) * (MAX_NUM_ROWS + MAX_NUM_COLUMNS));
-    for (int i = 0; i < curr_stage.num_nodes; i++)
+    // free dynamically allocated memory
+    for (int i = 0; i < (*curr_stage).num_nodes; i++)
     {
-        struct node progen_node = curr_stage.nodes[i];
+        free((*curr_stage).keys[i].keyStr);
+        free((*curr_stage).nodes[i].ac.mps);
+    }
+    free((*curr_stage).nodes);
+    free((*curr_stage).keys);
+}
+
+struct stage *construct_next_stage(struct stage *curr_stage)
+{
+    struct stage *next_stage = (struct stage *)malloc(sizeof(struct stage));
+    if (next_stage == NULL)
+    {
+        clean_up(curr_stage);
+        exit(1);
+    }
+    (*next_stage).num_nodes = 0;
+    (*next_stage).nodes = malloc(sizeof(struct node) * (MAX_NUM_ROWS + MAX_NUM_COLUMNS));
+    (*next_stage).keys = malloc(sizeof(struct key) * (MAX_NUM_ROWS + MAX_NUM_COLUMNS));
+    for (int i = 0; i < (*curr_stage).num_nodes; i++)
+    {
+        struct node progen_node = (*curr_stage).nodes[i];
         for (int j = 0; j < progen_node.aes.num_AEs; j++)
         {
             if (iselig(j, progen_node))
             {
-                update_next_stage(j, progen_node, &next_stage);
+                update_next_stage(j, progen_node, next_stage);
             }
         }
     }
 
-    // free dynamically allocated memory
-    for (int i = 0; i < curr_stage.num_nodes; i++)
-    {
-        free(curr_stage.keys[i].keyStr);
-        free(curr_stage.nodes[i].ac.mps);
-    }
-    free(curr_stage.nodes);
-    free(curr_stage.keys);
-
+    clean_up(curr_stage);
     return next_stage;
 }
 
@@ -776,7 +836,7 @@ double get_exact_prob(double theta2)
 
     theta = theta2;
 
-    struct stage curr_stage = init_stage();
+    struct stage *curr_stage = init_stage();
 
     int num_mutn = n - 1;
 
@@ -786,7 +846,9 @@ double get_exact_prob(double theta2)
         curr_stage = construct_next_stage(curr_stage);
     }
 
-    return curr_stage.nodes[0].p;
+    double ret = (*curr_stage).nodes[0].p;
+    clean_up(curr_stage);
+    return ret;
 }
 
 // utilities
@@ -841,6 +903,8 @@ void quick_sort(int arr[], int index[], int low, int high)
 int *sort_and_return_indices(int arr[], int size)
 {
     int *indices = (int *)malloc(size * sizeof(int));
+    if (indices == NULL)
+        return NULL;
     // Initialize indices array
     for (int i = 0; i < size; i++)
     {
@@ -862,12 +926,8 @@ void reorganize_array(int original[][MAX_NUM_COLUMNS], int order[], int rows, in
     }
 }
 
-int main()
+int calc_Wu()
 {
-    // int region_len = 16569;
-    // int Ne = -775;
-    // double theta2 = -4 * Ne * 2.6e-7 * region_len;
-
     FILE *fptr;
     fptr = fopen("./input.txt", "r");
 
