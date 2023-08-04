@@ -926,10 +926,11 @@ void reorganize_array(int original[][MAX_NUM_COLUMNS], int order[], int rows, in
     }
 }
 
-int calc_Wu()
+double calc_Wu()
 {
     FILE *fptr;
-    fptr = fopen("./input.txt", "r");
+    char* next_token;
+    fopen_s(&fptr, "./input.txt", "r");
 
     char line[1000];
 
@@ -939,15 +940,14 @@ int calc_Wu()
         {
             n = 0;
 
-            char *pToken = strtok(line, ",");
+            char *pToken = strtok_s(line, &line, ",", &next_token);
             while (pToken != NULL)
             {
                 observed_types[m][n++] = atoi(pToken);
-                pToken = strtok(NULL, ",");
+                pToken = strtok_s(NULL, &line, ",", &next_token);
             }
             m++;
         }
-        //printf("m:%d, n:%d\n", m, n);
     }
 
     // print_types(observed_types);
