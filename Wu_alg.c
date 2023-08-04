@@ -952,6 +952,6 @@ double calc_Wu()
 
     // print_types(observed_types);
     double p = get_exact_prob(12.4);
-    //printf("\nResult: %.18f", p);
+    printf("\nResult: %.18f", p);
     return p;
 }
